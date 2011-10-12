@@ -1,4 +1,3 @@
-
 #include "erl_nif.h"
 
 ErlNifResourceType* bsn_type;
@@ -12,11 +11,11 @@ typedef struct {
 
 */
 
-
-typedef struct {
+struct bsn_elem_struct {
 	ErlNifBinary bin;
-	void* next;
-} bsn_elem;
+	struct bsn_elem_struct* next;
+};
+typedef struct bsn_elem_struct bsn_elem;
 
 typedef bsn_elem* bsn_list;
 
@@ -96,17 +95,17 @@ private_compare(ErlNifBinary* b1, ErlNifBinary* b2)
 bsn_elem* 
 private_chain_shift(bsn_elem* ptr, ErlNifBinary* bin, int* num_ptr)
 {
-	while (ptr != NULL) {
+	while (1) {
+		(*num_ptr)++;
 		if (private_compare(&(ptr->bin), bin)) {
 			/* found an equal binary. Invert num */
 			(*num_ptr) *= -1;
 			return ptr;
 		}
+		if ((ptr->next) == NULL)
+			return ptr;
 		ptr = ptr->next;
-		(*num_ptr)++;
 	}
-
-	return ptr;
 }
 
 /* Append the element `el' to the chain `chain' */
@@ -120,7 +119,7 @@ private_chain_append(bsn_elem** chain, bsn_elem* el, int* num_ptr)
 		*chain = el;
 	} else {
 		last = private_chain_shift(*chain, &(el->bin), num_ptr);
-		if ((*num_ptr) > 0) {
+		if ((*num_ptr) < 0) {
 			/* Element was already added. */
 			private_clear_elem(el);
 		} else {
@@ -189,7 +188,7 @@ bsn_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 	ErlNifBinary bin;
 	bsn_res* r;
 	unsigned int pos;
-	int num = 1;
+	int num = 0;
 	bsn_elem* elem_ptr;
 	
 	if (!(enif_get_resource(env, argv[0], bsn_type, (void**) &r)
@@ -208,7 +207,7 @@ bsn_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 	enif_mutex_lock(r->mutex);
 	private_chain_append(&(r->list[pos]), elem_ptr, &num);
-	if (num > 0)
+	if (num >= 0)
 		(r->count)++;
 	enif_mutex_unlock(r->mutex);
 	
@@ -221,7 +220,7 @@ bsn_search(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 	ErlNifBinary bin;
 	bsn_res* r;
 	unsigned int pos;
-	int num = 1;
+	int num = 0;
 	
 	if (!(enif_get_resource(env, argv[0], bsn_type, (void**) &r)
 		&& enif_inspect_binary(env, argv[1], &bin)))
@@ -242,7 +241,7 @@ bsn_clear(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 	ErlNifBinary bin;
 	bsn_res* r;
 	unsigned int pos;
-	int num = 1;
+	int num = 0;
 	bsn_elem* elem_ptr;
 	
 	if (!(enif_get_resource(env, argv[0], bsn_type, (void**) &r)
@@ -253,7 +252,7 @@ bsn_clear(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 	enif_mutex_lock(r->mutex);
 	elem_ptr = private_chain_shift_clear(&(r->list[pos]), &bin, &num);
-	if (num < 0) {
+	if (elem_ptr != NULL) {
 		private_clear_elem(elem_ptr);
 		(r->count)--;
 	}
@@ -261,6 +260,79 @@ bsn_clear(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 	
 	return enif_make_int(env, num);
 }
+
+static ERL_NIF_TERM 
+bsn_all_chain(ErlNifEnv* env, bsn_elem* e, ERL_NIF_TERM tail)
+{
+	ERL_NIF_TERM head;
+	ErlNifBinary bin;
+	while (e != NULL) {
+		bin = e->bin;
+		enif_realloc_binary(&bin, bin.size);
+		head = enif_make_binary(env, &bin);
+		tail = enif_make_list_cell(env, head, tail);
+		e = e->next;
+	}
+	return tail;
+}
+  
+static ERL_NIF_TERM 
+bsn_chains(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+	bsn_res* r;
+	unsigned int max;
+	bsn_list* ptr;
+	ERL_NIF_TERM tail, head;
+	
+	if (!enif_get_resource(env, argv[0], bsn_type, (void**) &r))
+		return enif_make_badarg(env);
+	tail = enif_make_list(env, 0);
+
+	ptr = r->list;
+
+	enif_mutex_lock(r->mutex);
+	max = r->max;
+
+	while (max) {
+		head = enif_make_list(env, 0);
+		head = bsn_all_chain(env, *ptr, head);
+		tail = enif_make_list_cell(env, head, tail);
+		
+		ptr++;
+		max--;
+	}
+	enif_mutex_unlock(r->mutex);
+	
+	return tail;
+}
+  
+static ERL_NIF_TERM 
+bsn_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+	bsn_res* r;
+	unsigned int max;
+	bsn_list* ptr;
+	ERL_NIF_TERM list;
+	
+	if (!enif_get_resource(env, argv[0], bsn_type, (void**) &r))
+		return enif_make_badarg(env);
+	list = enif_make_list(env, 0);
+
+	ptr = r->list;
+
+	enif_mutex_lock(r->mutex);
+	max = r->max;
+
+	while (max) {
+		list = bsn_all_chain(env, *ptr, list);
+		ptr++;
+		max--;
+	}
+	enif_mutex_unlock(r->mutex);
+	
+	return list;
+}
+  
 
 static ERL_NIF_TERM 
 bsn_count(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
@@ -304,12 +376,13 @@ bsn_compare(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 void private_clear_all(bsn_res* r)
 {
 	unsigned int max;
-	bsn_elem* elem_ptr;
+	bsn_list* ptr;
 	max = r->max;
+	ptr = r->list;
 
 	while (max) {
-		private_chain_clear_all(elem_ptr);
-		elem_ptr++;
+		private_chain_clear_all(*ptr);
+		ptr++;
 		max--;
 	}
 }
@@ -344,13 +417,6 @@ on_load(ErlNifEnv* env, void** priv, ERL_NIF_TERM info)
 
 
 int
-on_reload(ErlNifEnv* env, void** priv, ERL_NIF_TERM info)
-{
-    return 0;
-}
-
-
-int
 on_upgrade(ErlNifEnv* env, void** priv, void** old_priv, ERL_NIF_TERM info)
 {
     return 0;
@@ -360,6 +426,8 @@ on_upgrade(ErlNifEnv* env, void** priv, void** old_priv, ERL_NIF_TERM info)
 static ErlNifFunc nif_functions[] = {
     {"new",     1, bsn_new},
     {"add",     2, bsn_add},
+    {"all",     1, bsn_all},
+    {"chains",  1, bsn_chains},
     {"in",      2, bsn_search},
     {"clear",   2, bsn_clear},
     {"count",   1, bsn_count},
@@ -369,4 +437,4 @@ static ErlNifFunc nif_functions[] = {
 };
 
 
-ERL_NIF_INIT(bsn, nif_functions, &on_load, &on_reload, &on_upgrade, NULL);
+ERL_NIF_INIT(bsn, nif_functions, &on_load, &on_load, &on_upgrade, NULL);

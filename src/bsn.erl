@@ -5,7 +5,7 @@
 
 %% API
 -export([hash/2, compare/2]).
--export([new/1, add/2, in/2, count/1, clear/2]).
+-export([new/1, add/2, all/1, chains/1, in/2, count/1, clear/2]).
 
 -define(NIF_NOT_LOADED, erlang:nif_error(nif_not_loaded)).
 
@@ -29,6 +29,12 @@ new(CellsCount) ->
 %% If the result is a positive integer 
 %% then object was added after (result) elements.
 add(Res, Bin) ->
+	?NIF_NOT_LOADED.
+
+all(Res) ->
+	?NIF_NOT_LOADED.
+
+chains(Res) ->
 	?NIF_NOT_LOADED.
 
 %% Add new element.
