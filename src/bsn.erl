@@ -1,25 +1,27 @@
 -module(bsn).
 
--on_load(init/0).
--export([init/0]).
-
 %% API
 -export([hash/2, compare/2]).
--export([new/1, add/2, all/1, chains/1, in/2, count/1, clear/2]).
-
--define(NIF_NOT_LOADED, erlang:nif_error(nif_not_loaded)).
+-export([new/2, add/2, all/1, chains/1, in/2, count/1, clear/2]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("triq/include/triq.hrl").
 -endif.
 
-init() ->
-    erlang:load_nif(code:priv_dir('bsn')++"/bsn_drv", 0).
 
 %% Create new resource, `CellCount' is the size of the painters' store.
-new(CellsCount) ->
-	?NIF_NOT_LOADED.
+new('int_quadric', CellsCount) when CellsCount > 0 ->
+	{'bsn_int', bsn_int:new(-CellsCount)};
+
+new('int_linear', CellsCount) when CellsCount > 0 ->
+	{'bsn_int', bsn_int:new(CellsCount)};
+
+new('ext', CellsCount) when CellsCount > 0 ->
+	{'bsn_ext', bsn_ext:new(CellsCount)}.
+
+
+
 
 %% Add new element.
 %% If the result is a negative integer 
@@ -28,14 +30,14 @@ new(CellsCount) ->
 %%
 %% If the result is a positive integer 
 %% then object was added after (result) elements.
-add(Res, Bin) ->
-	?NIF_NOT_LOADED.
+add({Type, Res}, Bin) ->
+	Type:add(Res, Bin).
 
-all(Res) ->
-	?NIF_NOT_LOADED.
+all({Type, Res}) ->
+	Type:all(Res).
 
-chains(Res) ->
-	?NIF_NOT_LOADED.
+chains({Type, Res}) ->
+	Type:chains(Res).
 
 %% Add new element.
 %% If the result is a negative integer 
@@ -43,22 +45,22 @@ chains(Res) ->
 %%
 %% If the result is a positive integer 
 %% then object was not found with (result) steps.
-in(Res, Bin) ->
-	?NIF_NOT_LOADED.
+in({Type, Res}, Bin) ->
+	Type:in(Res, Bin).
+    
+clear({Type, Res}, Bin) ->
+	Type:clear(Res, Bin).
 
 %% Return the count of elements stored in this resource.
-count(Res) ->
-	?NIF_NOT_LOADED.
+count({Type, Res}) ->
+	Type:count(Res).
 
 %% Calculate the hash of the  binary
 hash(Bin, Max) ->
-	?NIF_NOT_LOADED.
+	bsn_ext:hash(Bin, Max).
 	
 compare(Bin1, Bin2) ->
-	?NIF_NOT_LOADED.
-    
-clear(Res, Bin) ->
-	?NIF_NOT_LOADED.
+	bsn_ext:compare(Bin1, Bin2).
 
 -ifdef(TEST).
 prop_compare_test_() ->
