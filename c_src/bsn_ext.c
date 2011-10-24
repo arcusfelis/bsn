@@ -95,8 +95,11 @@ private_compare(ErlNifBinary* b1, ErlNifBinary* b2)
 bsn_elem* 
 private_chain_shift(bsn_elem* ptr, ErlNifBinary* bin, int* num_ptr)
 {
+	(*num_ptr)++;
+	if ((ptr) == NULL)
+		return ptr;
+
 	while (1) {
-		(*num_ptr)++;
 		if (private_compare(&(ptr->bin), bin)) {
 			/* found an equal binary. Invert num */
 			(*num_ptr) *= -1;
@@ -105,6 +108,7 @@ private_chain_shift(bsn_elem* ptr, ErlNifBinary* bin, int* num_ptr)
 		if ((ptr->next) == NULL)
 			return ptr;
 		ptr = ptr->next;
+		(*num_ptr)++;
 	}
 }
 
