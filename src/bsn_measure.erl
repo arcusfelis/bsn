@@ -1,5 +1,14 @@
 -module(bsn_measure).
--export([gen/2, check_type/3]).
+-export([test/0, gen/2, check_type/3, test_type/2]).
+
+-ifndef(TEST).
+-define(TEST, e).
+-endif.
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+%-include_lib("triq/include/triq.hrl").
+-endif.
+
 
 % InOutK is (success / failure) checks.
 % Return {TestCases, Elements}.
@@ -45,6 +54,7 @@ do_check(F, Size, InOutK, CapacityK) ->
 	InList = lists:map(fun erlang:'-'/1, InNegList),
 	AllList = InList ++ MissList,
 	{CapacityK, 
+		{real_count, bsn:count(Res)}, 
 		{miss, round4(average(MissList))}, 
 		{in, round4(average(InList))}, 
 		{all, round4(average(AllList))}}.
@@ -73,10 +83,45 @@ check_values(_Res, [], Acc) ->
 	Acc.
 	
 fill_values(Res, [H|T]) ->
-	bsn:add(Res, integer_to_binary(H)),
-	fill_values(Res, T);
+	case bsn:add(Res, integer_to_binary(H)) of
+	no_more ->
+		Res;
+	X ->
+		fill_values(Res, T)
+	end;
 fill_values(Res, []) ->
 	Res.
+	
+fill_values(Res, [H|T], Acc) ->
+	case bsn:add(Res, integer_to_binary(H)) of
+	no_more ->
+		Acc;
+	X ->
+		fill_values(Res, T, [H|Acc])
+	end;
+fill_values(_Res, [], Acc) ->
+	Acc.
 
 integer_to_binary(X) ->
 	erlang:list_to_binary(erlang:integer_to_list(X)).
+
+test() ->
+	[{ext, check_type(ext, 100, 0.5)}
+	,{int_linear, check_type(int_linear, 100, 0.5)}
+	,{int_quadric, check_type(int_quadric, 100, 0.5)}].
+
+
+-ifdef(TEST).
+	
+do_test_() ->
+	[?_assert(test_type(bsn:new(ext, 100), 100))
+	,?_assert(test_type(bsn:new(int_linear, 100), 100))
+	,?_assert(test_type(bsn:new(int_quadric, 100), 100))
+	].
+-endif.
+
+test_type(Res, ElemCount) ->
+	{CaseList, ElemList} = gen(ElemCount, 1),
+	Vals = fill_values(Res, ElemList, []),
+	%Vals = ElemList,
+	lists:all(fun(X) -> bsn:in(Res, integer_to_binary(X)) < 0 end, Vals).

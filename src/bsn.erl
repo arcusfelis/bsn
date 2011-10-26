@@ -6,7 +6,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--include_lib("triq/include/triq.hrl").
+%-include_lib("triq/include/triq.hrl").
 -endif.
 
 
@@ -63,6 +63,7 @@ compare(Bin1, Bin2) ->
 	bsn_ext:compare(Bin1, Bin2).
 
 -ifdef(TEST).
+-ifdef(FORALL).
 prop_compare_test_() ->
     {"Binary compare testing.",
     	{timeout, 60,
@@ -71,5 +72,6 @@ prop_compare_test_() ->
 prop_compare() ->
    ?FORALL({Xs},{binary()},
    	    compare(Xs, Xs)).
+-endif.
 
 -endif.

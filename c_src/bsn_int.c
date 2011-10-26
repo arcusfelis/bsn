@@ -2,7 +2,7 @@
 
 
 ErlNifResourceType* bsn_type;
-ERL_NIF_TERM ATOM_TRUE, ATOM_FALSE;
+ERL_NIF_TERM ATOM_TRUE, ATOM_FALSE, ATOM_NO_MORE;
 
 struct bsn_elem_struct {
 	ErlNifBinary bin;
@@ -161,6 +161,9 @@ bsn_add(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 	/* Error: already added or owerflow */
 	if (!((num >= 0) && (num < max)))
 		enif_release_binary(&bin);
+
+	if (num >= max)
+		return ATOM_NO_MORE;
 	
 	return enif_make_int(env, num);
 }
@@ -293,6 +296,8 @@ on_load(ErlNifEnv* env, void** priv, ERL_NIF_TERM info)
 {
     ATOM_TRUE     = enif_make_atom(env, "true");
     ATOM_FALSE    = enif_make_atom(env, "false");
+    ATOM_NO_MORE  = enif_make_atom(env, "no_more");
+
 	
     ErlNifResourceFlags flags = (ErlNifResourceFlags)(ERL_NIF_RT_CREATE |
         ERL_NIF_RT_TAKEOVER);
