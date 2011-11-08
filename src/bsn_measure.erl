@@ -1,5 +1,7 @@
 -module(bsn_measure).
--export([test/0, gen/2, check_type/3, test_type/2]).
+-export([test/0, test2/0, test3/0, print/0]).
+-export([gen/2, check_type/4]).
+-export([check_type/3, get_type/3, test_type/2]).
 
 -ifndef(TEST).
 -define(TEST, e).
@@ -32,19 +34,24 @@ filter(_ElemCount, _InOutK, _Acc, AllAcc, ElemAcc) ->
 	{AllAcc, ElemAcc}.
 
 
-
 check_type(Type, Size, InOutK) ->
+	check_type(fun average/1, Type, Size, InOutK).
+
+get_type(Type, Size, InOutK) ->
+	check_type(fun(X) -> X end, Type, Size, InOutK).
+
+check_type(OutF, Type, Size, InOutK) ->
 	% Build resourse
 	F = fun() -> bsn:new(Type, Size) end,
 
-	[do_check(F, Size, InOutK, 0.1),
-	 do_check(F, Size, InOutK, 0.25),
- 	 do_check(F, Size, InOutK, 0.5),
-	 do_check(F, Size, InOutK, 0.75),
-	 do_check(F, Size, InOutK, 0.9),
-	 do_check(F, Size, InOutK, 1)].
+	[do_check(OutF, F, Size, InOutK, 0.1),
+	 do_check(OutF, F, Size, InOutK, 0.25),
+ 	 do_check(OutF, F, Size, InOutK, 0.5),
+	 do_check(OutF, F, Size, InOutK, 0.75),
+	 do_check(OutF, F, Size, InOutK, 0.9),
+	 do_check(OutF, F, Size, InOutK, 1)].
 
-do_check(F, Size, InOutK, CapacityK) ->
+do_check(OutF, F, Size, InOutK, CapacityK) ->
 	Res = F(),
 	ElemCount = Size * CapacityK,
 	{CaseList, ElemList} = gen(ElemCount, InOutK),
@@ -55,9 +62,9 @@ do_check(F, Size, InOutK, CapacityK) ->
 	AllList = InList ++ MissList,
 	{CapacityK, 
 		{real_count, bsn:count(Res)}, 
-		{miss, round4(average(MissList))}, 
-		{in, round4(average(InList))}, 
-		{all, round4(average(AllList))}}.
+		{miss, OutF(MissList)}, 
+		{in,   OutF(InList)}, 
+		{all,  OutF(AllList)}}.
 
 	
 average([]) ->
@@ -68,7 +75,9 @@ average([X|Tail]) ->
 average1([X|Tail], Sum, Count) ->
     average1(Tail, Sum + X, Count + 1);
 average1([], Sum, Count) ->
-    Sum / Count.
+    round4(Sum / Count).
+
+
 
 
 round4(X) when is_number(X) ->
@@ -110,6 +119,78 @@ test() ->
 	,{int_linear, check_type(int_linear, 100, 0.5)}
 	,{int_quadric, check_type(int_quadric, 100, 0.5)}].
 
+%% All values.
+test2() ->
+	[{ext, get_type(ext, 100, 0.5)}
+	,{int_linear, get_type(int_linear, 100, 0.5)}
+	,{int_quadric, get_type(int_quadric, 100, 0.5)}].
+
+%% Counts of values.
+test3() ->
+	F = fun anal_values/1,
+	[{ext, check_type(F, ext, 100, 0.5)}
+	,{int_linear, check_type(F, int_linear, 100, 0.5)}
+	,{int_quadric, check_type(F, int_quadric, 100, 0.5)}].
+
+print() ->
+	do_print(test3()).
+
+do_print([{Type, Vals}|T]) ->
+	io:format("Type ~w~n", [Type]),
+	lists:map(fun({K,
+		{real_count,RC},
+		{miss, M},
+		{in, I},
+		{all, A}}) ->
+		io:format("K=~w, RC=~w~n", [K, RC]),
+		io:format("count,miss,in,all\n"),
+
+		print_mia(lists:seq(1, 100), M, I, A), 
+		io:format("\n") 
+	end, Vals),
+	do_print(T);
+do_print([]) ->
+	ok.
+
+print_mia([H|T], [{H,0}|T1], [{H,0}|T2], [{H,0}|T3]) ->
+	print_mia(T, T1, T2, T3);
+print_mia([H|T], [{H,C1}|T1], [{H,C2}|T2], [{H,C3}|T3]) ->
+	io:format("~w,~w,~w,~w\n", [H, C1, C2, C3]),
+	print_mia(T, T1, T2, T3);
+
+print_mia([H|_]=L, [{X,_}|_]=L1, L2, L3) 
+	when X =/= H ->
+	print_mia(L, [{H,0}|L1], L2, L3);
+print_mia([H|_]=L, [], L2, L3) ->
+	print_mia(L, [{H,0}], L2, L3);
+
+print_mia([H|_]=L, L1, [{X,_}|_]=L2, L3)
+	when X =/= H ->
+	print_mia(L, L1, [{H,0}|L2], L3);
+print_mia([H|_]=L, L1, [], L3) ->
+	print_mia(L, L1, [{H,0}], L3);
+
+print_mia([H|_]=L, L1, L2, L3) ->
+	print_mia(L, L1, L2, [{H,0}|L3]);
+print_mia([], _, _, _) ->
+	ok.
+	
+	
+
+	
+	
+
+
+anal_values(L) ->
+	do_anal(lists:sort(L), 1, []).
+
+do_anal([H,H|T], C, Acc) ->
+	do_anal([H|T], C+1, Acc);
+do_anal([OldH|T], C, Acc) ->
+	do_anal(T, 1, [{OldH, C}|Acc]);
+do_anal([], C, Acc) ->
+	lists:reverse(Acc).
+	
 
 -ifdef(TEST).
 	
