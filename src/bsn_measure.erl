@@ -2,6 +2,7 @@
 -export([test/0, test2/0, test3/0, print/0]).
 -export([gen/2, check_type/4]).
 -export([check_type/3, get_type/3, test_type/2]).
+-export([check_degrade/0, test_filled/1]).
 
 -ifndef(TEST).
 -define(TEST, e).
@@ -61,6 +62,7 @@ do_check(OutF, F, Size, InOutK, CapacityK) ->
 	InList = lists:map(fun erlang:'-'/1, InNegList),
 	AllList = InList ++ MissList,
 	{CapacityK, 
+		{size, Size}, 
 		{real_count, bsn:count(Res)}, 
 		{miss, OutF(MissList)}, 
 		{in,   OutF(InList)}, 
@@ -190,7 +192,33 @@ do_anal([OldH|T], C, Acc) ->
 	do_anal(T, 1, [{OldH, C}|Acc]);
 do_anal([], C, Acc) ->
 	lists:reverse(Acc).
+
+avg(L) -> do_avg(L, 0, 0).
+do_avg([H|T], Cnt, Sum) ->
+	do_avg(T, Cnt+1, Sum+H);
+do_avg([], Cnt, Sum) ->
+	Sum / Cnt.
 	
+check_degrade() ->
+	[do_check_degrade(ext)
+	,do_check_degrade(int_linear)
+	,do_check_degrade(int_quadric)
+	].
+
+do_check_degrade(Type) ->
+	OutF = fun avg/1,
+	[Type,
+		lists:map(fun(Size) ->
+			F = fun() -> bsn:new(Type, Size) end,
+			do_check(OutF, F, Size, 0.5, 1)
+			end, [10, 100, 500, 1000, 5000, 10000])].
+
+test_filled(ElemCount) ->
+	Res = bsn:new(ext, ElemCount),
+	{CaseList, ElemList} = gen(ElemCount, 1),
+	Vals = fill_values(Res, ElemList, []),
+	{bsn_ext, R} = Res,
+	R.
 
 -ifdef(TEST).
 	
